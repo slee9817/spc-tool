@@ -26,6 +26,13 @@ st.caption("Control charts, Western Electric rules, and process capability.")
 # Sidebar: data
 # ---------------------------------------------------------------------------
 
+# Suggested baseline for each sample dataset, so visitors land on a good demo
+PRESET_BASELINE = {
+    "mean_shift.csv": 60,
+    "tool_wear_drift.csv": 30,
+    "subgroups_n5.csv": 17,
+}
+
 st.sidebar.header("1. Data")
 source = st.sidebar.radio("Source", ["Sample dataset", "Upload CSV"], horizontal=True)
 
@@ -34,13 +41,16 @@ if source == "Sample dataset":
     if not samples:
         st.error("No sample data found. Run `python generate_data.py` first.")
         st.stop()
-    df = pd.read_csv(DATA_DIR / st.sidebar.selectbox("Dataset", samples))
+    default = samples.index("mean_shift.csv") if "mean_shift.csv" in samples else 0
+    dataset = st.sidebar.selectbox("Dataset", samples, index=default)
+    df = pd.read_csv(DATA_DIR / dataset)
 else:
     upload = st.sidebar.file_uploader("CSV file (one measurement per row)", type="csv")
     if upload is None:
         st.info("Upload a CSV file with at least one numeric column to begin.")
         st.stop()
     df = pd.read_csv(upload)
+    dataset = None
 
 numeric_cols = df.select_dtypes("number").columns.tolist()
 if not numeric_cols:
@@ -55,7 +65,8 @@ x = df[column].dropna().to_numpy(dtype=float)
 # ---------------------------------------------------------------------------
 
 st.sidebar.header("2. Chart")
-chart_type = st.sidebar.radio("Chart type", ["I-MR (individuals)", "X̄-R (subgroups)"])
+chart_type = st.sidebar.radio("Chart type", ["I-MR (individuals)", "X̄-R (subgroups)"],
+                              index=1 if dataset == "subgroups_n5.csv" else 0)
 subgrouped = chart_type.startswith("X̄")
 n = st.sidebar.slider("Subgroup size", 2, 10, 5) if subgrouped else 1
 
@@ -65,14 +76,14 @@ baseline = st.sidebar.slider(
     f"Baseline {unit} for limits",
     min_value=min(5, points_available),
     max_value=points_available,
-    value=points_available,
+    value=min(PRESET_BASELINE.get(dataset, points_available), points_available),
     help="Control limits are calculated from the first N points only (Phase I), "
          "then all points are judged against them. Use a known-good period.",
 )
 
 st.sidebar.header("3. Spec limits (optional)")
-lsl = st.sidebar.number_input("LSL", value=None, format="%.4f", placeholder="lower spec")
-usl = st.sidebar.number_input("USL", value=None, format="%.4f", placeholder="upper spec")
+lsl = st.sidebar.number_input("LSL", value=24.95 if dataset else None, format="%.4f", placeholder="lower spec")
+usl = st.sidebar.number_input("USL", value=25.05 if dataset else None, format="%.4f", placeholder="upper spec")
 
 
 # ---------------------------------------------------------------------------
